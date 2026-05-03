@@ -249,8 +249,11 @@ def parse_args() -> argparse.Namespace:
     )
     categories_parser.set_defaults(func=run_list_enwiki_categories)
 
-    return parser.parse_args()
+    if len(sys.argv) == 1:
+        parser.print_help()
+        raise SystemExit(0)
 
+    return parser.parse_args()
 
 def main() -> int:
     args = parse_args()
