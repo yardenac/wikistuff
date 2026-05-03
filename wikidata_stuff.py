@@ -23,6 +23,7 @@ def fetch_label(qid: str, language: str) -> str:
             "ids": qid,
             "props": "labels",
             "languages": language,
+            "languagefallback": "1",
             "format": "json",
             "origin": "*",
         }
