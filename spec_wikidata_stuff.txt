@@ -1,0 +1,349 @@
+wikidata_stuff.py command specification
+======================================
+
+Goal
+----
+
+Provide a small command line tool for resolving Wikidata QIDs into useful
+English Wikipedia identifiers, then using those identifiers for English
+Wikipedia category queries.
+
+The tool should be dependency-free Python and use the Wikidata and English
+Wikipedia MediaWiki APIs directly.
+
+
+Command overview
+----------------
+
+The CLI should use argparse subcommands:
+
+    wikidata_stuff.py label Q4675
+    wikidata_stuff.py page Q4675
+    wikidata_stuff.py categories Q4675
+    wikidata_stuff.py members "Category:Volcanoes of Washington (state)"
+
+Global options:
+
+    -h, --help
+        Show help.
+
+    --json
+        Emit machine-readable JSON instead of plain text.
+
+
+Subcommand: label
+-----------------
+
+Usage:
+
+    wikidata_stuff.py label QID [-l LANGUAGE]
+
+Purpose:
+
+    Print the Wikidata label for a QID.
+
+Arguments:
+
+    QID
+        Wikidata item ID, such as Q42 or Q4675.
+
+Options:
+
+    -l, --language LANGUAGE
+        Label language code. Defaults to "en".
+
+Behavior:
+
+    Use the Wikidata wbgetentities API with:
+
+        action=wbgetentities
+        ids=<QID>
+        props=labels
+        languages=<LANGUAGE>
+        languagefallback=1
+        format=json
+
+    The languagefallback=1 parameter is required so that multilingual/default
+    labels, such as the "mul" label on Q4675, can be returned for English.
+
+Plain text output:
+
+    Mount St. Helens
+
+JSON output:
+
+    {
+      "qid": "Q4675",
+      "language": "en",
+      "label": "Mount St. Helens"
+    }
+
+
+Subcommand: page
+----------------
+
+Usage:
+
+    wikidata_stuff.py page QID
+
+Purpose:
+
+    Resolve a Wikidata QID to the corresponding English Wikipedia article.
+
+Arguments:
+
+    QID
+        Wikidata item ID, such as Q42 or Q4675.
+
+Behavior:
+
+    First, use the Wikidata wbgetentities API with:
+
+        action=wbgetentities
+        ids=<QID>
+        props=sitelinks
+        sitefilter=enwiki
+        format=json
+
+    Read:
+
+        entities[QID].sitelinks.enwiki.title
+
+    Then resolve that title through the English Wikipedia API:
+
+        action=query
+        titles=<TITLE>
+        redirects=1
+        format=json
+
+    The Wikipedia response provides the stable English Wikipedia pageid.
+
+Plain text output:
+
+    Mount St. Helens
+    57064
+    https://en.wikipedia.org/wiki/Mount_St._Helens
+
+JSON output:
+
+    {
+      "qid": "Q4675",
+      "title": "Mount St. Helens",
+      "pageid": 57064,
+      "url": "https://en.wikipedia.org/wiki/Mount_St._Helens"
+    }
+
+Notes:
+
+    The URL is useful for humans, but the title and pageid are more useful for
+    subsequent API queries.
+
+
+Subcommand: categories
+----------------------
+
+Usage:
+
+    wikidata_stuff.py categories QID [--hidden] [--limit N]
+
+Purpose:
+
+    List categories attached to the English Wikipedia article associated with a
+    Wikidata QID.
+
+Arguments:
+
+    QID
+        Wikidata item ID, such as Q42 or Q4675.
+
+Options:
+
+    --hidden
+        Include hidden maintenance categories. By default, hidden categories
+        should be excluded.
+
+    --limit N
+        Maximum number of categories to print. Defaults to all available
+        categories by following continuation.
+
+Behavior:
+
+    Resolve QID to English Wikipedia pageid using the same behavior as the
+    page subcommand.
+
+    Then call the English Wikipedia API:
+
+        action=query
+        pageids=<PAGEID>
+        prop=categories
+        clprop=hidden
+        cllimit=max
+        format=json
+
+    If --hidden is not set, exclude categories returned with the hidden marker.
+
+    Follow API continuation until there are no more category results or the
+    requested --limit has been reached.
+
+Plain text output:
+
+    Category:Active volcanoes
+    Category:Cascade Volcanoes
+    Category:Mount St. Helens
+
+JSON output:
+
+    {
+      "qid": "Q4675",
+      "pageid": 57064,
+      "title": "Mount St. Helens",
+      "categories": [
+        {
+          "title": "Category:Active volcanoes",
+          "hidden": false
+        }
+      ]
+    }
+
+
+Subcommand: members
+-------------------
+
+Usage:
+
+    wikidata_stuff.py members CATEGORY [--type TYPE] [--namespace NS] [--limit N]
+
+Purpose:
+
+    List members of an English Wikipedia category.
+
+Arguments:
+
+    CATEGORY
+        English Wikipedia category title. The title should include the
+        "Category:" prefix. Example:
+
+            Category:Volcanoes of Washington (state)
+
+Options:
+
+    --type TYPE
+        Restrict category member type. Allowed values:
+
+            page
+            subcat
+            file
+
+        If omitted, include all member types.
+
+    --namespace NS
+        Restrict results to a MediaWiki namespace number, such as 0 for
+        articles or 14 for categories.
+
+    --limit N
+        Maximum number of members to print. Defaults to all available members
+        by following continuation.
+
+Behavior:
+
+    Call the English Wikipedia categorymembers API:
+
+        action=query
+        list=categorymembers
+        cmtitle=<CATEGORY>
+        cmprop=ids|title|type
+        cmlimit=max
+        format=json
+
+    Add cmtype=<TYPE> when --type is set.
+
+    Add cmnamespace=<NS> when --namespace is set.
+
+    Follow API continuation until there are no more members or the requested
+    --limit has been reached.
+
+Plain text output:
+
+    Mount Adams
+    Mount Baker
+    Mount Rainier
+    Mount St. Helens
+
+JSON output:
+
+    {
+      "category": "Category:Volcanoes of Washington (state)",
+      "members": [
+        {
+          "pageid": 12345,
+          "ns": 0,
+          "title": "Mount Adams",
+          "type": "page"
+        }
+      ]
+    }
+
+
+Validation and errors
+---------------------
+
+QID validation:
+
+    QIDs should match:
+
+        ^Q[1-9][0-9]*$
+
+    Input may be normalized to uppercase before validation.
+
+Category validation:
+
+    The members command should require the "Category:" prefix. This keeps the
+    command explicit and avoids silently querying the wrong title.
+
+Exit codes:
+
+    0
+        Success.
+
+    1
+        Lookup, network, or API error.
+
+    2
+        Invalid command line arguments.
+
+Error output:
+
+    Errors should be printed to stderr and start with "error:".
+
+
+Implementation notes
+--------------------
+
+Use urllib from the Python standard library. No third-party packages should be
+required.
+
+Use a descriptive User-Agent header for API requests.
+
+Build URLs and query strings with urllib.parse.urlencode.
+
+For Wikipedia page URLs, replace spaces with underscores and percent-encode
+the title:
+
+    https://en.wikipedia.org/wiki/<encoded_title>
+
+Do not use the URL as the primary internal identifier. Prefer English
+Wikipedia pageid for API calls, and keep the title for display.
+
+
+Deferred features
+-----------------
+
+Recursive category traversal should be added later as a separate command, such
+as "tree" or "walk".
+
+Reasons to defer recursion:
+
+    Category graphs can contain cycles.
+    Broad categories can produce very large result sets.
+    Useful traversal needs explicit depth limits and type filters.
+
