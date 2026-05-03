@@ -13,11 +13,25 @@ import urllib.request
 
 
 WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
+ENWIKI_API_URL = "https://en.wikipedia.org/w/api.php"
+USER_AGENT = "wikidata-stuff/0.1"
 QID_RE = re.compile(r"^Q[1-9]\d*$")
 
 
+def api_get(api_url: str, params: dict[str, str]) -> dict:
+    query = urllib.parse.urlencode(params)
+    request = urllib.request.Request(
+        f"{api_url}?{query}",
+        headers={"User-Agent": USER_AGENT},
+    )
+
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.load(response)
+
+
 def fetch_label(qid: str, language: str) -> str:
-    query = urllib.parse.urlencode(
+    payload = api_get(
+        WIKIDATA_API_URL,
         {
             "action": "wbgetentities",
             "ids": qid,
@@ -25,15 +39,8 @@ def fetch_label(qid: str, language: str) -> str:
             "languages": language,
             "languagefallback": "1",
             "format": "json",
-        }
+        },
     )
-    request = urllib.request.Request(
-        f"{WIKIDATA_API_URL}?{query}",
-        headers={"User-Agent": "wikidata-stuff/0.1"},
-    )
-
-    with urllib.request.urlopen(request, timeout=15) as response:
-        payload = json.load(response)
 
     entity = payload.get("entities", {}).get(qid)
     if not entity or entity.get("missing"):
@@ -46,11 +53,99 @@ def fetch_label(qid: str, language: str) -> str:
     return label
 
 
+def fetch_enwiki_title(qid: str) -> str:
+    payload = api_get(
+        WIKIDATA_API_URL,
+        {
+            "action": "wbgetentities",
+            "ids": qid,
+            "props": "sitelinks",
+            "sitefilter": "enwiki",
+            "format": "json",
+        },
+    )
+
+    entity = payload.get("entities", {}).get(qid)
+    if not entity or entity.get("missing"):
+        raise LookupError(f"{qid} was not found on Wikidata")
+
+    title = entity.get("sitelinks", {}).get("enwiki", {}).get("title")
+    if not title:
+        raise LookupError(f"{qid} has no English Wikipedia article")
+
+    return title
+
+
+def fetch_enwiki_page(qid: str) -> dict:
+    title = fetch_enwiki_title(qid)
+    payload = api_get(
+        ENWIKI_API_URL,
+        {
+            "action": "query",
+            "titles": title,
+            "redirects": "1",
+            "format": "json",
+        },
+    )
+
+    pages = payload.get("query", {}).get("pages", {})
+    for page in pages.values():
+        if "missing" in page:
+            break
+        return {
+            "pageid": page["pageid"],
+            "title": page["title"],
+        }
+
+    raise LookupError(f"{title!r} was not found on English Wikipedia")
+
+
+def fetch_enwiki_categories(pageid: int, include_hidden: bool, limit: int | None) -> list[dict]:
+    categories = []
+    params = {
+        "action": "query",
+        "pageids": str(pageid),
+        "prop": "categories",
+        "clprop": "hidden",
+        "cllimit": "max",
+        "format": "json",
+    }
+    if not include_hidden:
+        params["clshow"] = "!hidden"
+
+    while True:
+        payload = api_get(ENWIKI_API_URL, params)
+        pages = payload.get("query", {}).get("pages", {})
+        page = pages.get(str(pageid), {})
+
+        for category in page.get("categories", []):
+            categories.append(
+                {
+                    "title": category["title"],
+                    "hidden": "hidden" in category,
+                }
+            )
+            if limit is not None and len(categories) >= limit:
+                return categories
+
+        continuation = payload.get("continue")
+        if not continuation:
+            return categories
+        params.update(continuation)
+
+
 def normalize_qid(qid: str) -> str:
     normalized = qid.upper()
     if not QID_RE.fullmatch(normalized):
         raise ValueError(f"invalid QID {qid!r}; expected something like Q42")
     return normalized
+
+
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return number
 
 
 def run_get_wikidata_label(args: argparse.Namespace) -> int:
@@ -70,6 +165,30 @@ def run_get_wikidata_label(args: argparse.Namespace) -> int:
         )
     else:
         print(label)
+
+    return 0
+
+
+def run_list_enwiki_categories(args: argparse.Namespace) -> int:
+    qid = normalize_qid(args.qid)
+    page = fetch_enwiki_page(qid)
+    categories = fetch_enwiki_categories(page["pageid"], args.hidden, args.limit)
+
+    if args.output_json:
+        print(
+            json.dumps(
+                {
+                    "qid": qid,
+                    "pageid": page["pageid"],
+                    "title": page["title"],
+                    "categories": categories,
+                },
+                indent=2,
+            )
+        )
+    else:
+        for category in categories:
+            print(category["title"])
 
     return 0
 
@@ -95,6 +214,7 @@ def parse_args() -> argparse.Namespace:
         "--json",
         action="store_true",
         dest="output_json",
+        default=argparse.SUPPRESS,
         help="emit machine-readable JSON",
     )
     label_parser.add_argument(
@@ -104,6 +224,30 @@ def parse_args() -> argparse.Namespace:
         help="label language code to request (default: en)",
     )
     label_parser.set_defaults(func=run_get_wikidata_label)
+
+    categories_parser = subparsers.add_parser(
+        "list-enwiki-categories",
+        help="list categories for the English Wikipedia article associated with a QID",
+    )
+    categories_parser.add_argument("qid", help="Wikidata entity ID, for example Q4675")
+    categories_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="output_json",
+        default=argparse.SUPPRESS,
+        help="emit machine-readable JSON",
+    )
+    categories_parser.add_argument(
+        "--hidden",
+        action="store_true",
+        help="include hidden maintenance categories",
+    )
+    categories_parser.add_argument(
+        "--limit",
+        type=positive_int,
+        help="maximum number of categories to print",
+    )
+    categories_parser.set_defaults(func=run_list_enwiki_categories)
 
     return parser.parse_args()
 
