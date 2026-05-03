@@ -17,10 +17,23 @@ Command overview
 
 The CLI should use argparse subcommands:
 
-    wikidata_stuff.py label Q4675
-    wikidata_stuff.py page Q4675
-    wikidata_stuff.py categories Q4675
-    wikidata_stuff.py members "Category:Volcanoes of Washington (state)"
+    wikidata_stuff.py get-wikidata-label Q4675
+    wikidata_stuff.py get-enwiki-page Q4675
+    wikidata_stuff.py list-enwiki-categories Q4675
+    wikidata_stuff.py list-enwiki-category-members "Category:Volcanoes of Washington (state)"
+
+Subcommand names should be hyphenated verb phrases. Each subcommand should
+also identify the relevant external system:
+
+    wikidata
+        Wikidata.
+
+    enwiki
+        English Wikipedia.
+
+This avoids nouns that read like actions on local data. For example,
+"get-wikidata-label" means "retrieve the Wikidata label", while "label" could
+imply "apply a label".
 
 Global options:
 
@@ -31,12 +44,12 @@ Global options:
         Emit machine-readable JSON instead of plain text.
 
 
-Subcommand: label
------------------
+Subcommand: get-wikidata-label
+------------------------------
 
 Usage:
 
-    wikidata_stuff.py label QID [-l LANGUAGE]
+    wikidata_stuff.py get-wikidata-label QID [-l LANGUAGE]
 
 Purpose:
 
@@ -79,12 +92,12 @@ JSON output:
     }
 
 
-Subcommand: page
-----------------
+Subcommand: get-enwiki-page
+---------------------------
 
 Usage:
 
-    wikidata_stuff.py page QID
+    wikidata_stuff.py get-enwiki-page QID
 
 Purpose:
 
@@ -139,12 +152,12 @@ Notes:
     subsequent API queries.
 
 
-Subcommand: categories
-----------------------
+Subcommand: list-enwiki-categories
+----------------------------------
 
 Usage:
 
-    wikidata_stuff.py categories QID [--hidden] [--limit N]
+    wikidata_stuff.py list-enwiki-categories QID [--hidden] [--limit N]
 
 Purpose:
 
@@ -169,7 +182,7 @@ Options:
 Behavior:
 
     Resolve QID to English Wikipedia pageid using the same behavior as the
-    page subcommand.
+    get-enwiki-page subcommand.
 
     Then call the English Wikipedia API:
 
@@ -206,12 +219,12 @@ JSON output:
     }
 
 
-Subcommand: members
--------------------
+Subcommand: list-enwiki-category-members
+----------------------------------------
 
 Usage:
 
-    wikidata_stuff.py members CATEGORY [--type TYPE] [--namespace NS] [--limit N]
+    wikidata_stuff.py list-enwiki-category-members CATEGORY [--type TYPE] [--namespace NS] [--limit N]
 
 Purpose:
 
@@ -297,8 +310,9 @@ QID validation:
 
 Category validation:
 
-    The members command should require the "Category:" prefix. This keeps the
-    command explicit and avoids silently querying the wrong title.
+    The list-enwiki-category-members command should require the "Category:"
+    prefix. This keeps the command explicit and avoids silently querying the
+    wrong title.
 
 Exit codes:
 
@@ -346,4 +360,3 @@ Reasons to defer recursion:
     Category graphs can contain cycles.
     Broad categories can produce very large result sets.
     Useful traversal needs explicit depth limits and type filters.
-
