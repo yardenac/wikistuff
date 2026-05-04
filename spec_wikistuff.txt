@@ -1,30 +1,36 @@
 wikistuff.py command specification
-======================================
+==================================
 
 Goal
 ----
 
-Provide a small command line tool for resolving Wikidata QIDs into useful
-English Wikipedia identifiers, then using those identifiers for English
-Wikipedia category queries.
+Provide a small read-only command line tool for Wikidata and English Wikipedia
+lookups.
 
-The tool should be dependency-free Python and use the Wikidata and English
-Wikipedia MediaWiki APIs directly.
+This specification describes only behavior currently implemented in
+wikistuff.py.
 
 
 Command overview
 ----------------
 
-The CLI should use argparse subcommands:
+Implemented subcommands:
 
-    wikistuff.py get-wikidata-label Q4675
-    wikistuff.py get-enwiki-page Q4675
-    wikistuff.py list-enwiki-categories Q4675
-    wikistuff.py list-enwiki-category-members "Category:Volcanoes of Washington (state)"
     wikistuff.py help [SUBCOMMAND]
+    wikistuff.py get-wikidata-label QID
+    wikistuff.py list-enwiki-categories QID
+    wikistuff.py list-example-humans
 
-Subcommand names should be hyphenated verb phrases. Each subcommand should
-also identify the relevant external system:
+Global options:
+
+    -h, --help
+        Show argparse help.
+
+    --json
+        Emit machine-readable JSON for subcommands that support JSON output.
+
+Subcommand names are hyphenated verb phrases. Commands that query external
+systems identify that system in the command name:
 
     wikidata
         Wikidata.
@@ -32,21 +38,14 @@ also identify the relevant external system:
     enwiki
         English Wikipedia.
 
-This avoids nouns that read like actions on local data. For example,
-"get-wikidata-label" means "retrieve the Wikidata label", while "label" could
-imply "apply a label".
+    example
+        A small example query, currently backed by Wikidata Query Service.
 
-The "help" subcommand is the exception to the external-system naming rule. It
-does not query Wikidata or English Wikipedia; it only prints local command
-usage text.
+The help subcommand is an exception. It does not query Wikidata or English
+Wikipedia; it only prints local command usage text.
 
-Global options:
-
-    -h, --help
-        Show help.
-
-    --json
-        Emit machine-readable JSON instead of plain text.
+If wikistuff.py is run with no arguments, it prints top-level help and exits
+successfully.
 
 
 Subcommand: help
@@ -58,28 +57,74 @@ Usage:
 
 Purpose:
 
-    Show help for the tool or for a specific subcommand.
+    Show help for the tool or for a specific implemented subcommand.
 
 Arguments:
 
     SUBCOMMAND
-        Optional subcommand name, such as get-wikidata-label or
-        list-enwiki-categories.
+        Optional subcommand name. Implemented choices are:
+
+            get-wikidata-label
+            help
+            list-example-humans
+            list-enwiki-categories
 
 Behavior:
 
-    This command should not make any network requests. It should only print
-    argparse-generated help text.
+    If SUBCOMMAND is omitted, print top-level argparse help.
 
-Plain text output:
+    If SUBCOMMAND is provided, print argparse help for that subcommand.
 
-    If SUBCOMMAND is omitted, print the top-level help.
-
-    If SUBCOMMAND is provided, print help for that subcommand.
+    This command does not make network requests.
 
 JSON output:
 
-    JSON output is not needed for help.
+    JSON output is not implemented for help.
+
+
+Subcommand: list-example-humans
+-------------------------------
+
+Usage:
+
+    wikistuff.py list-example-humans [--json]
+
+Purpose:
+
+    List ten example human Wikidata items using SPARQL.
+
+Options:
+
+    --json
+        Emit the raw SPARQL JSON binding rows instead of plain text.
+
+Behavior:
+
+    Query the Wikidata Query Service SPARQL endpoint:
+
+        https://query.wikidata.org/sparql
+
+    The implemented query is:
+
+        SELECT ?item ?itemLabel WHERE {
+          ?item wdt:P31 wd:Q5.
+          SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+        }
+        LIMIT 10
+
+    Request format=json.
+
+Plain text output:
+
+    Each result is printed as:
+
+        <label><tab><item-uri>
+
+JSON output:
+
+    Prints the raw list from:
+
+        results.bindings
 
 
 Subcommand: get-wikidata-label
@@ -87,7 +132,7 @@ Subcommand: get-wikidata-label
 
 Usage:
 
-    wikistuff.py get-wikidata-label QID [-l LANGUAGE]
+    wikistuff.py get-wikidata-label [--json] [-l LANGUAGE] QID
 
 Purpose:
 
@@ -100,12 +145,17 @@ Arguments:
 
 Options:
 
+    --json
+        Emit JSON instead of plain text.
+
     -l, --language LANGUAGE
         Label language code. Defaults to "en".
 
 Behavior:
 
-    Use the Wikidata wbgetentities API with:
+    Normalize the QID to uppercase, then validate it.
+
+    Use the Wikidata wbgetentities API:
 
         action=wbgetentities
         ids=<QID>
@@ -114,8 +164,8 @@ Behavior:
         languagefallback=1
         format=json
 
-    The languagefallback=1 parameter is required so that multilingual/default
-    labels, such as the "mul" label on Q4675, can be returned for English.
+    The languagefallback=1 parameter allows multilingual/default labels, such
+    as the "mul" label on Q4675, to be returned for English.
 
 Plain text output:
 
@@ -130,72 +180,12 @@ JSON output:
     }
 
 
-Subcommand: get-enwiki-page
----------------------------
-
-Usage:
-
-    wikistuff.py get-enwiki-page QID
-
-Purpose:
-
-    Resolve a Wikidata QID to the corresponding English Wikipedia article.
-
-Arguments:
-
-    QID
-        Wikidata item ID, such as Q42 or Q4675.
-
-Behavior:
-
-    First, use the Wikidata wbgetentities API with:
-
-        action=wbgetentities
-        ids=<QID>
-        props=sitelinks
-        sitefilter=enwiki
-        format=json
-
-    Read:
-
-        entities[QID].sitelinks.enwiki.title
-
-    Then resolve that title through the English Wikipedia API:
-
-        action=query
-        titles=<TITLE>
-        redirects=1
-        format=json
-
-    The Wikipedia response provides the stable English Wikipedia pageid.
-
-Plain text output:
-
-    Mount St. Helens
-    57064
-    https://en.wikipedia.org/wiki/Mount_St._Helens
-
-JSON output:
-
-    {
-      "qid": "Q4675",
-      "title": "Mount St. Helens",
-      "pageid": 57064,
-      "url": "https://en.wikipedia.org/wiki/Mount_St._Helens"
-    }
-
-Notes:
-
-    The URL is useful for humans, but the title and pageid are more useful for
-    subsequent API queries.
-
-
 Subcommand: list-enwiki-categories
 ----------------------------------
 
 Usage:
 
-    wikistuff.py list-enwiki-categories QID [--hidden] [--limit N]
+    wikistuff.py list-enwiki-categories [--json] [--hidden] [--limit N] QID
 
 Purpose:
 
@@ -209,20 +199,44 @@ Arguments:
 
 Options:
 
+    --json
+        Emit JSON instead of plain text.
+
     --hidden
-        Include hidden maintenance categories. By default, hidden categories
-        should be excluded.
+        Include hidden maintenance categories. Hidden categories are excluded
+        by default.
 
     --limit N
-        Maximum number of categories to print. Defaults to all available
-        categories by following continuation.
+        Maximum number of categories to print. N must be at least 1. If omitted,
+        follow API continuation until all available categories are returned.
 
 Behavior:
 
-    Resolve QID to English Wikipedia pageid using the same behavior as the
-    get-enwiki-page subcommand.
+    Normalize the QID to uppercase, then validate it.
 
-    Then call the English Wikipedia API:
+    First, resolve the QID to an English Wikipedia title using the Wikidata
+    wbgetentities API:
+
+        action=wbgetentities
+        ids=<QID>
+        props=sitelinks
+        sitefilter=enwiki
+        format=json
+
+    Read:
+
+        entities[QID].sitelinks.enwiki.title
+
+    Next, resolve that title to an English Wikipedia page ID using the English
+    Wikipedia API:
+
+        action=query
+        titles=<TITLE>
+        redirects=1
+        format=json
+
+    Finally, request categories for that page ID using the English Wikipedia
+    API:
 
         action=query
         pageids=<PAGEID>
@@ -231,105 +245,29 @@ Behavior:
         cllimit=max
         format=json
 
-    If --hidden is not set, exclude categories returned with the hidden marker.
+    If --hidden is not set, add:
+
+        clshow=!hidden
 
     Follow API continuation until there are no more category results or the
     requested --limit has been reached.
 
 Plain text output:
 
-    Category:Active volcanoes
-    Category:Cascade Volcanoes
-    Category:Mount St. Helens
+    Category:19th-century volcanic events
+    Category:20th-century volcanic events
+    Category:21st-century volcanic events
 
 JSON output:
 
     {
       "qid": "Q4675",
-      "pageid": 57064,
+      "pageid": 36649,
       "title": "Mount St. Helens",
       "categories": [
         {
-          "title": "Category:Active volcanoes",
+          "title": "Category:19th-century volcanic events",
           "hidden": false
-        }
-      ]
-    }
-
-
-Subcommand: list-enwiki-category-members
-----------------------------------------
-
-Usage:
-
-    wikistuff.py list-enwiki-category-members CATEGORY [--type TYPE] [--namespace NS] [--limit N]
-
-Purpose:
-
-    List members of an English Wikipedia category.
-
-Arguments:
-
-    CATEGORY
-        English Wikipedia category title. The title should include the
-        "Category:" prefix. Example:
-
-            Category:Volcanoes of Washington (state)
-
-Options:
-
-    --type TYPE
-        Restrict category member type. Allowed values:
-
-            page
-            subcat
-            file
-
-        If omitted, include all member types.
-
-    --namespace NS
-        Restrict results to a MediaWiki namespace number, such as 0 for
-        articles or 14 for categories.
-
-    --limit N
-        Maximum number of members to print. Defaults to all available members
-        by following continuation.
-
-Behavior:
-
-    Call the English Wikipedia categorymembers API:
-
-        action=query
-        list=categorymembers
-        cmtitle=<CATEGORY>
-        cmprop=ids|title|type
-        cmlimit=max
-        format=json
-
-    Add cmtype=<TYPE> when --type is set.
-
-    Add cmnamespace=<NS> when --namespace is set.
-
-    Follow API continuation until there are no more members or the requested
-    --limit has been reached.
-
-Plain text output:
-
-    Mount Adams
-    Mount Baker
-    Mount Rainier
-    Mount St. Helens
-
-JSON output:
-
-    {
-      "category": "Category:Volcanoes of Washington (state)",
-      "members": [
-        {
-          "pageid": 12345,
-          "ns": 0,
-          "title": "Mount Adams",
-          "type": "page"
         }
       ]
     }
@@ -340,17 +278,15 @@ Validation and errors
 
 QID validation:
 
-    QIDs should match:
+    QIDs must match:
 
         ^Q[1-9][0-9]*$
 
-    Input may be normalized to uppercase before validation.
+    Input is normalized to uppercase before validation.
 
-Category validation:
+Limit validation:
 
-    The list-enwiki-category-members command should require the "Category:"
-    prefix. This keeps the command explicit and avoids silently querying the
-    wrong title.
+    --limit must be an integer greater than or equal to 1.
 
 Exit codes:
 
@@ -358,43 +294,38 @@ Exit codes:
         Success.
 
     1
-        Lookup, network, or API error.
+        Lookup, network, timeout, or API error.
 
     2
-        Invalid command line arguments.
+        Invalid command line arguments or invalid QID.
 
 Error output:
 
-    Errors should be printed to stderr and start with "error:".
+    Runtime errors handled by wikistuff.py are printed to stderr and start with
+    "error:".
+
+    Argparse errors use argparse's default error format.
 
 
 Implementation notes
 --------------------
 
-Use urllib from the Python standard library. No third-party packages should be
-required.
+The implementation uses only the Python standard library:
 
-Use a descriptive User-Agent header for API requests.
+    argparse
+    json
+    re
+    sys
+    urllib
 
-Build URLs and query strings with urllib.parse.urlencode.
+Network requests are read-only HTTPS GET requests to:
 
-For Wikipedia page URLs, replace spaces with underscores and percent-encode
-the title:
+    https://www.wikidata.org/w/api.php
+    https://en.wikipedia.org/w/api.php
+    https://query.wikidata.org/sparql
 
-    https://en.wikipedia.org/wiki/<encoded_title>
+The current User-Agent header is:
 
-Do not use the URL as the primary internal identifier. Prefer English
-Wikipedia pageid for API calls, and keep the title for display.
+    wikidata-stuff/0.1
 
-
-Deferred features
------------------
-
-Recursive category traversal should be added later as a separate command, such
-as "tree" or "walk".
-
-Reasons to defer recursion:
-
-    Category graphs can contain cycles.
-    Broad categories can produce very large result sets.
-    Useful traversal needs explicit depth limits and type filters.
+Query strings are built with urllib.parse.urlencode.
