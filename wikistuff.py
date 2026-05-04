@@ -14,6 +14,7 @@ import urllib.request
 
 WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
 ENWIKI_API_URL = "https://en.wikipedia.org/w/api.php"
+WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
 USER_AGENT = "wikidata-stuff/0.1"
 QID_RE = re.compile(r"^Q[1-9]\d*$")
 
@@ -192,6 +193,34 @@ def run_list_enwiki_categories(args: argparse.Namespace) -> int:
 
     return 0
 
+def run_list_example_humans(args: argparse.Namespace) -> int:
+    query = """
+SELECT ?item ?itemLabel WHERE {
+  ?item wdt:P31 wd:Q5.
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". }
+}
+LIMIT 10
+"""
+
+    payload = api_get(
+        WIKIDATA_SPARQL_URL,
+        {
+            "query": query,
+            "format": "json",
+        },
+    )
+
+    rows = payload.get("results", {}).get("bindings", [])
+
+    if args.output_json:
+        print(json.dumps(rows, indent=2))
+    else:
+        for row in rows:
+            label = row.get("itemLabel", {}).get("value", "")
+            item = row.get("item", {}).get("value", "")
+            print(f"{label}\t{item}")
+
+    return 0
 
 def run_help(args: argparse.Namespace) -> int:
     if args.topic:
@@ -259,6 +288,22 @@ def parse_args() -> argparse.Namespace:
         help="maximum number of categories to print",
     )
     categories_parser.set_defaults(func=run_list_enwiki_categories)
+
+    humans_parser = subparsers.add_parser(
+        "list-example-humans",
+        help="list ten example human Wikidata items using SPARQL",
+    )
+    command_parsers["list-example-humans"] = humans_parser
+
+    humans_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="output_json",
+        default=argparse.SUPPRESS,
+        help="emit machine-readable JSON",
+    )
+
+    humans_parser.set_defaults(func=run_list_example_humans)
 
     help_parser = subparsers.add_parser(
         "help",
