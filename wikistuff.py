@@ -278,6 +278,10 @@ def parse_args() -> argparse.Namespace:
         command_parsers=command_parsers,
     )
 
+    if len(sys.argv) == 1:
+        parser.print_help()
+        raise SystemExit(0)
+
     return parser.parse_args()
 
 def main() -> int:
