@@ -326,6 +326,6 @@ Network requests are read-only HTTPS GET requests to:
 
 The current User-Agent header is:
 
-    wikidata-stuff/0.1
+    wikistuff/0.1
 
 Query strings are built with urllib.parse.urlencode.

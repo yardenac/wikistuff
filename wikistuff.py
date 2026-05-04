@@ -15,7 +15,7 @@ import urllib.request
 WIKIDATA_API_URL = "https://www.wikidata.org/w/api.php"
 ENWIKI_API_URL = "https://en.wikipedia.org/w/api.php"
 WIKIDATA_SPARQL_URL = "https://query.wikidata.org/sparql"
-USER_AGENT = "wikidata-stuff/0.1"
+USER_AGENT = "wikistuff/0.1"
 QID_RE = re.compile(r"^Q[1-9]\d*$")
 
 
