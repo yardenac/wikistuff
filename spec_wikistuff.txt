@@ -1,4 +1,4 @@
-wikidata_stuff.py command specification
+wikistuff.py command specification
 ======================================
 
 Goal
@@ -17,11 +17,11 @@ Command overview
 
 The CLI should use argparse subcommands:
 
-    wikidata_stuff.py get-wikidata-label Q4675
-    wikidata_stuff.py get-enwiki-page Q4675
-    wikidata_stuff.py list-enwiki-categories Q4675
-    wikidata_stuff.py list-enwiki-category-members "Category:Volcanoes of Washington (state)"
-    wikidata_stuff.py help [SUBCOMMAND]
+    wikistuff.py get-wikidata-label Q4675
+    wikistuff.py get-enwiki-page Q4675
+    wikistuff.py list-enwiki-categories Q4675
+    wikistuff.py list-enwiki-category-members "Category:Volcanoes of Washington (state)"
+    wikistuff.py help [SUBCOMMAND]
 
 Subcommand names should be hyphenated verb phrases. Each subcommand should
 also identify the relevant external system:
@@ -54,7 +54,7 @@ Subcommand: help
 
 Usage:
 
-    wikidata_stuff.py help [SUBCOMMAND]
+    wikistuff.py help [SUBCOMMAND]
 
 Purpose:
 
@@ -87,7 +87,7 @@ Subcommand: get-wikidata-label
 
 Usage:
 
-    wikidata_stuff.py get-wikidata-label QID [-l LANGUAGE]
+    wikistuff.py get-wikidata-label QID [-l LANGUAGE]
 
 Purpose:
 
@@ -135,7 +135,7 @@ Subcommand: get-enwiki-page
 
 Usage:
 
-    wikidata_stuff.py get-enwiki-page QID
+    wikistuff.py get-enwiki-page QID
 
 Purpose:
 
@@ -195,7 +195,7 @@ Subcommand: list-enwiki-categories
 
 Usage:
 
-    wikidata_stuff.py list-enwiki-categories QID [--hidden] [--limit N]
+    wikistuff.py list-enwiki-categories QID [--hidden] [--limit N]
 
 Purpose:
 
@@ -262,7 +262,7 @@ Subcommand: list-enwiki-category-members
 
 Usage:
 
-    wikidata_stuff.py list-enwiki-category-members CATEGORY [--type TYPE] [--namespace NS] [--limit N]
+    wikistuff.py list-enwiki-category-members CATEGORY [--type TYPE] [--namespace NS] [--limit N]
 
 Purpose:
 
