@@ -21,6 +21,7 @@ The CLI should use argparse subcommands:
     wikidata_stuff.py get-enwiki-page Q4675
     wikidata_stuff.py list-enwiki-categories Q4675
     wikidata_stuff.py list-enwiki-category-members "Category:Volcanoes of Washington (state)"
+    wikidata_stuff.py help [SUBCOMMAND]
 
 Subcommand names should be hyphenated verb phrases. Each subcommand should
 also identify the relevant external system:
@@ -35,6 +36,10 @@ This avoids nouns that read like actions on local data. For example,
 "get-wikidata-label" means "retrieve the Wikidata label", while "label" could
 imply "apply a label".
 
+The "help" subcommand is the exception to the external-system naming rule. It
+does not query Wikidata or English Wikipedia; it only prints local command
+usage text.
+
 Global options:
 
     -h, --help
@@ -42,6 +47,39 @@ Global options:
 
     --json
         Emit machine-readable JSON instead of plain text.
+
+
+Subcommand: help
+----------------
+
+Usage:
+
+    wikidata_stuff.py help [SUBCOMMAND]
+
+Purpose:
+
+    Show help for the tool or for a specific subcommand.
+
+Arguments:
+
+    SUBCOMMAND
+        Optional subcommand name, such as get-wikidata-label or
+        list-enwiki-categories.
+
+Behavior:
+
+    This command should not make any network requests. It should only print
+    argparse-generated help text.
+
+Plain text output:
+
+    If SUBCOMMAND is omitted, print the top-level help.
+
+    If SUBCOMMAND is provided, print help for that subcommand.
+
+JSON output:
+
+    JSON output is not needed for help.
 
 
 Subcommand: get-wikidata-label

@@ -193,6 +193,14 @@ def run_list_enwiki_categories(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_help(args: argparse.Namespace) -> int:
+    if args.topic:
+        args.command_parsers[args.topic].print_help()
+    else:
+        args.parser.print_help()
+    return 0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Read-only Wikidata and English Wikipedia lookup helpers."
@@ -204,11 +212,13 @@ def parse_args() -> argparse.Namespace:
         help="emit machine-readable JSON",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+    command_parsers = {}
 
     label_parser = subparsers.add_parser(
         "get-wikidata-label",
         help="print the Wikidata label for a QID",
     )
+    command_parsers["get-wikidata-label"] = label_parser
     label_parser.add_argument("qid", help="Wikidata entity ID, for example Q42")
     label_parser.add_argument(
         "--json",
@@ -229,6 +239,7 @@ def parse_args() -> argparse.Namespace:
         "list-enwiki-categories",
         help="list categories for the English Wikipedia article associated with a QID",
     )
+    command_parsers["list-enwiki-categories"] = categories_parser
     categories_parser.add_argument("qid", help="Wikidata entity ID, for example Q4675")
     categories_parser.add_argument(
         "--json",
@@ -249,9 +260,23 @@ def parse_args() -> argparse.Namespace:
     )
     categories_parser.set_defaults(func=run_list_enwiki_categories)
 
-    if len(sys.argv) == 1:
-        parser.print_help()
-        raise SystemExit(0)
+    help_parser = subparsers.add_parser(
+        "help",
+        help="show help for the tool or a subcommand",
+    )
+    help_topics = sorted([*command_parsers, "help"])
+    help_parser.add_argument(
+        "topic",
+        nargs="?",
+        choices=help_topics,
+        help="subcommand to describe",
+    )
+    command_parsers["help"] = help_parser
+    help_parser.set_defaults(
+        func=run_help,
+        parser=parser,
+        command_parsers=command_parsers,
+    )
 
     return parser.parse_args()
 
